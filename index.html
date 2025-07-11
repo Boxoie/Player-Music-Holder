@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Music Playlist Holder</title>
+
+  <!-- Alpine.js for logic -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Styling -->
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+    }
+
+    input, select, button {
+      padding: 8px;
+      margin: 6px 0;
+      display: block;
+      width: 100%;
+    }
+
+    details {
+      margin-top: 10px;
+      background: pink;
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    a {
+      color: blue;
+    }
+
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      background-color: white;
+      min-width: 100px;
+      box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+      z-index: 1;
+    }
+
+    .dropdown:hover .dropdown-content {
+      display: block;
+    }
+
+    .dropdown-content button {
+      background: none;
+      border: none;
+      padding: 8px;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .video-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+
+    .play-big {
+      padding: 6px 12px;
+      font-size: 14px;
+    }
+
+    .play-small {
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Main Alpine.js App -->
+<div x-data="playlistApp()" x-init="loadFromLocal()">
+
+  <!-- Form for entering YouTube URL and choosing a category -->
+  <form @submit.prevent="add">
+    <input x-model="userInput" placeholder="Enter YouTube URL" type="url" required />
+
+    <select x-model="selectedCategory">
+      <option value="Happy songs">Happy songs</option>
+      <option value="Movement songs">Movement songs</option>
+      <option value="Activity songs">Activity songs</option>
+      <option value="Play Time songs">Play Time songs</option>
+      <option value="Snack Time songs">Snack Time songs</option>
+      <option value="Dance Time songs">Dance Time songs</option>
+    </select>
+
+    <button type="submit">Add</button>
+  </form>
+
+  <!-- Loop through each category and show its songs -->
+  <template x-for="[category, videos] of Object.entries(playlist)" :key="category">
+    <div style="margin-top: 1em;">
+      <details @toggle="handleToggle($event, category)">
+        <!-- Category bar (title + play + menu) -->
+        <summary
+          style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;"
+        >
+          <!-- Category name -->
+          <span x-text="category" style="font-weight: bold;"></span>
+
+          <!-- Buttons to the right -->
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button
+              :class="openCategory === category ? 'play-small' : 'play-big'"
+              @click.stop="playAll(category)"
+            >
+              ▶️ Play All
+            </button>
+
+            <!-- 3-dot menu -->
+            <div class="dropdown">
+              <button>⋮</button>
+              <div class="dropdown-content">
+                <button @click.stop="clearCategory(category)">Clear All</button>
+              </div>
+            </div>
+          </div>
+        </summary>
+
+        <!-- Song links for this category -->
+        <template x-for="(video, index) in videos" :key="video.url">
+          <div class="video-row">
+            <a :href="video.url" x-text="video.title" target="_blank"></a>
+
+            <!-- Individual song delete menu -->
+            <div class="dropdown">
+              <button>⋮</button>
+              <div class="dropdown-content">
+                <button @click="removeVideo(category, index)">Delete</button>
+              </div>
+            </div>
+          </div>
+        </template>
+
+      </details>
+    </div>
+  </template>
+</div>
+
+<!-- Alpine app logic -->
+<script>
+  function playlistApp() {
+    return {
+      userInput: '',
+      selectedCategory: 'Movement songs',
+      openCategory: null,
+
+      playlist: {
+        'Happy songs': [],
+        'Movement songs': [],
+        'Activity songs': [],
+        'Play Time songs': [],
+        'Snack Time songs': [],
+        'Dance Time songs': []
+      },
+
+      async add() {
+        if (!this.userInput.startsWith('http')) {
+          alert('Please enter a valid YouTube URL.');
+          return;
+        }
+
+        try {
+          const response = await fetch(`https://www.youtube.com/oembed?url=${this.userInput}&format=json`);
+          const data = await response.json();
+
+          const videoData = {
+            title: data.title,
+            url: this.userInput
+          };
+
+          this.playlist[this.selectedCategory].push(videoData);
+          this.userInput = '';
+          this.saveToLocal();
+
+        } catch (error) {
+          alert('Could not fetch video info. Make sure it’s a valid YouTube link.');
+        }
+      },
+
+      playAll(category) {
+        const urls = this.playlist[category];
+        for (const video of urls) {
+          window.open(video.url, '_blank');
+        }
+      },
+
+      removeVideo(category, index) {
+        this.playlist[category].splice(index, 1);
+        this.saveToLocal();
+      },
+
+      clearCategory(category) {
+        if (confirm(`Are you sure you want to delete all songs in ${category}?`)) {
+          this.playlist[category] = [];
+          this.saveToLocal();
+        }
+      },
+
+      saveToLocal() {
+        localStorage.setItem('myPlaylist', JSON.stringify(this.playlist));
+      },
+
+      loadFromLocal() {
+        const saved = localStorage.getItem('myPlaylist');
+        if (saved) {
+          this.playlist = JSON.parse(saved);
+        }
+      },
+
+      handleToggle(event, category) {
+        if (event.target.open) {
+          // Close all other <details> elements
+          document.querySelectorAll('details').forEach(el => {
+            if (el !== event.target) {
+              el.removeAttribute('open');
+            }
+          });
+          this.openCategory = category;
+        } else {
+          this.openCategory = null;
+        }
+      }
+    };
+  }
+</script>
+
+</body>
+</html>
